@@ -922,7 +922,10 @@ app.get("/api/hashtag-trends", async (_request, response) => {
   const { clips, sources } = await getHashtagTrendClips();
   response.json({
     hashtags: ["#WorldCup2026", "#FIFAWorldCup", "#WeAre26"],
-    mode: clips.length ? "live-video-vv" : "schedule-projection",
+    mode: clips.length ? "projection-with-live-clips" : "schedule-projection",
+    pointSource: "schedule-projection",
+    clipSource: "live-platform-search",
+    explanation: "The line is a schedule-based heat projection across tournament dates. Video dots and cards are live published-content VV from TikTok, Instagram, and YouTube.",
     points: buildTrendProjection(),
     clips,
     sources,

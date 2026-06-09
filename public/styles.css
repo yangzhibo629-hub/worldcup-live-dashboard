@@ -653,6 +653,18 @@ h1 {
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
 }
 
+.trend-note {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 8px;
+  margin: 0;
+  color: rgba(255, 248, 230, 0.62);
+  font-size: 11px;
+  line-height: 1.35;
+  pointer-events: none;
+}
+
 .trend-window {
   position: absolute;
   top: 0;

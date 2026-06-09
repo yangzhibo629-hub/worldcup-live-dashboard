@@ -357,7 +357,7 @@ function renderTrendMonitor() {
     `;
   }).join("");
 
-  els.trendMode.textContent = data.mode === "live-video-vv" ? "实时视频 VV" : "赛程热度投影";
+  els.trendMode.textContent = data.mode === "projection-with-live-clips" ? "预测曲线 + 实时视频点" : "赛程热度预测";
   els.hashtagRow.innerHTML = (data.hashtags || []).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("");
   els.trendChart.innerHTML = `
     <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="世界杯 hashtag vv 趋势图">
@@ -375,6 +375,7 @@ function renderTrendMonitor() {
       ${axisTicks}
     </svg>
     <div class="trend-window" style="left:${Math.round(state.trendProgress * 100)}%"></div>
+    <p class="trend-note">折线是按赛程日期、比赛数量和淘汰赛阶段生成的热度预测，不代表未来已发生 VV；红点和下方视频卡片来自 TikTok / Instagram / YouTube 已发布内容的真实 VV。</p>
   `;
   els.trendVideos.innerHTML = clips.length
     ? clips.slice(0, 4).map((clip) => `
