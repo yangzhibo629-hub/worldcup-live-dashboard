@@ -635,15 +635,35 @@ h1 {
 
 .trend-line {
   fill: none;
-  stroke: url(#trendFill);
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 6;
 }
 
+.trend-projection-line {
+  stroke: rgba(246, 193, 63, 0.82);
+  stroke-dasharray: 14 12;
+}
+
+.trend-observed-line {
+  stroke: url(#trendFill);
+  stroke-width: 7;
+}
+
 .trend-point {
   fill: var(--chalk);
   opacity: 0.72;
+}
+
+.projection-point {
+  fill: rgba(255, 248, 230, 0.72);
+}
+
+.observed-point {
+  fill: var(--sun);
+  opacity: 0.95;
+  stroke: var(--pitch-2);
+  stroke-width: 1.5;
 }
 
 .clip-dot {
@@ -653,16 +673,49 @@ h1 {
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
 }
 
-.trend-note {
+.trend-legend {
   position: absolute;
   left: 12px;
   right: 12px;
   bottom: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   margin: 0;
   color: rgba(255, 248, 230, 0.62);
   font-size: 11px;
+  font-weight: 900;
   line-height: 1.35;
   pointer-events: none;
+}
+
+.trend-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.trend-legend i {
+  display: inline-block;
+  width: 24px;
+  height: 0;
+  border-top: 2px solid var(--sun);
+}
+
+.trend-legend .legend-dashed {
+  border-top-style: dashed;
+}
+
+.trend-legend .legend-solid {
+  border-top-color: #0f8b74;
+}
+
+.trend-legend .legend-dot {
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--chalk);
+  border-radius: 999px;
+  background: var(--ember);
 }
 
 .trend-window {

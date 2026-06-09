@@ -294,6 +294,7 @@ function renderTrendMonitor() {
   const data = state.trendData;
   if (!data) return;
   const points = data.points || [];
+  const observedPoints = data.observedPoints || [];
   const clips = data.clips || [];
   const width = 1600;
   const height = 164;
@@ -303,10 +304,10 @@ function renderTrendMonitor() {
   const plotBottom = 118;
   const axisY = 132;
   const labelY = 152;
-  const values = points.length ? points.map((point) => point.vv || 0) : [0];
+  const values = [...points, ...observedPoints].length ? [...points, ...observedPoints].map((point) => point.vv || 0) : [0];
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const dateValues = points
+  const dateValues = [...points, ...observedPoints]
     .map((point) => new Date(`${point.date}T00:00:00`).getTime())
     .filter((value) => !Number.isNaN(value));
   const minDate = dateValues.length ? Math.min(...dateValues) : Date.UTC(2026, 5, 11);
@@ -320,33 +321,39 @@ function renderTrendMonitor() {
     if (max === min) return (top + plotBottom) / 2;
     return plotBottom - ((value - min) / (max - min)) * (plotBottom - top);
   };
-  const pointXY = points.map((point, index) => {
+  const projectPoint = (point, index, list) => {
     const dateTime = new Date(`${point.date}T00:00:00`).getTime();
-    const x = dateValues.length ? xForTime(dateTime) : points.length <= 1 ? left : left + (index / (points.length - 1)) * (width - left - right);
+    const x = dateValues.length ? xForTime(dateTime) : list.length <= 1 ? left : left + (index / (list.length - 1)) * (width - left - right);
     const y = scaleY(point.vv || 0);
     return { ...point, x, y };
-  });
-  const nearestPoint = (x) => pointXY.reduce((nearest, point) => {
+  };
+  const projectedXY = points.map(projectPoint);
+  const observedXY = observedPoints.map(projectPoint);
+  const nearestPoint = (x) => [...observedXY, ...projectedXY].reduce((nearest, point) => {
     if (!nearest) return point;
     return Math.abs(point.x - x) < Math.abs(nearest.x - x) ? point : nearest;
   }, null);
-  const path = pointXY.map((point, index) => `${index ? "L" : "M"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
-  const tickIndexes = points.length
-    ? [...new Set([0, Math.floor(points.length * 0.25), Math.floor(points.length * 0.5), Math.floor(points.length * 0.75), points.length - 1])]
-    : [];
-  const axisTicks = tickIndexes.map((index) => {
-    const point = pointXY[index];
-    return point ? `
+  const projectionPath = projectedXY.map((point, index) => `${index ? "L" : "M"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
+  const observedPath = observedXY.map((point, index) => `${index ? "L" : "M"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
+  const finalDate = Date.UTC(2026, 6, 19);
+  const openingDate = Date.UTC(2026, 5, 11);
+  const tickTimes = [minDate, openingDate, Math.round((minDate + finalDate) / 2), finalDate]
+    .filter((time) => time >= minDate && time <= maxDate)
+    .filter((time, index, list) => list.findIndex((item) => Math.abs(item - time) < 1000 * 60 * 60 * 24 * 2) === index);
+  const axisTicks = tickTimes.map((time) => {
+    const x = xForTime(time);
+    const date = new Date(time).toISOString().slice(0, 10);
+    return `
       <g class="trend-axis-tick">
-        <line x1="${point.x.toFixed(1)}" y1="${axisY - 6}" x2="${point.x.toFixed(1)}" y2="${axisY + 4}" />
-        <text x="${point.x.toFixed(1)}" y="${labelY}">${escapeHtml(formatAxisDate(point.date) || point.label || "")}</text>
+        <line x1="${x.toFixed(1)}" y1="${axisY - 6}" x2="${x.toFixed(1)}" y2="${axisY + 4}" />
+        <text x="${x.toFixed(1)}" y="${labelY}">${escapeHtml(formatAxisDate(date))}</text>
       </g>
-    ` : "";
+    `;
   }).join("");
   const clipDots = clips.slice(0, 8).map((clip, index) => {
     const publishedTime = new Date(clip.publishedAt || "").getTime();
     const x = xForTime(publishedTime);
-    const anchor = nearestPoint(x) || { y: 70 };
+    const anchor = nearestPoint(x) || { y: scaleY(clip.views || clip.score || 0) };
     const y = Math.max(top + 7, Math.min(plotBottom - 7, anchor.y - 12 - (index % 3) * 8));
     return `
       <a href="${escapeHtml(clip.url)}" target="_blank" rel="noreferrer">
@@ -357,7 +364,7 @@ function renderTrendMonitor() {
     `;
   }).join("");
 
-  els.trendMode.textContent = data.mode === "projection-with-live-clips" ? "预测曲线 + 实时视频点" : "赛程热度预测";
+  els.trendMode.textContent = data.mode === "projection-and-observed-vv" ? "预估 VV + 真实 VV" : "赛程热度预测";
   els.hashtagRow.innerHTML = (data.hashtags || []).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("");
   els.trendChart.innerHTML = `
     <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="世界杯 hashtag vv 趋势图">
@@ -369,13 +376,19 @@ function renderTrendMonitor() {
       </defs>
       <path class="trend-grid" d="M ${left} ${plotBottom} H ${width - right} M ${left} ${(top + plotBottom) / 2} H ${width - right} M ${left} ${top} H ${width - right}" />
       <path class="trend-axis" d="M ${left} ${axisY} H ${width - right}" />
-      <path class="trend-line" d="${path}" />
-      ${pointXY.map((point, index) => index % 5 === 0 ? `<circle class="trend-point" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="3"><title>${escapeHtml(point.label)} · ${formatVV(point.vv)} VV</title></circle>` : "").join("")}
+      ${projectionPath ? `<path class="trend-line trend-projection-line" d="${projectionPath}" />` : ""}
+      ${observedPath ? `<path class="trend-line trend-observed-line" d="${observedPath}" />` : ""}
+      ${projectedXY.map((point, index) => index % 5 === 0 ? `<circle class="trend-point projection-point" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="3"><title>${escapeHtml(point.label)} · 预估 ${formatVV(point.vv)} VV</title></circle>` : "").join("")}
+      ${observedXY.map((point) => `<circle class="trend-point observed-point" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="4"><title>${escapeHtml(point.label)} · 真实观测 ${formatVV(point.vv)} VV · ${point.clipCount || 0} 条内容</title></circle>`).join("")}
       ${clipDots}
       ${axisTicks}
     </svg>
     <div class="trend-window" style="left:${Math.round(state.trendProgress * 100)}%"></div>
-    <p class="trend-note">折线是按赛程日期、比赛数量和淘汰赛阶段生成的热度预测，不代表未来已发生 VV；红点和下方视频卡片来自 TikTok / Instagram / YouTube 已发布内容的真实 VV。</p>
+    <div class="trend-legend">
+      <span><i class="legend-dashed"></i>虚线：赛程预估 VV</span>
+      <span><i class="legend-solid"></i>实线：真实观测 VV</span>
+      <span><i class="legend-dot"></i>红点：高 VV 原视频</span>
+    </div>
   `;
   els.trendVideos.innerHTML = clips.length
     ? clips.slice(0, 4).map((clip) => `

@@ -693,6 +693,27 @@ async function getHashtagTrendClips() {
   return { clips, sources };
 }
 
+function buildObservedTrendPoints(clips) {
+  const byDate = clips.reduce((map, clip) => {
+    const publishedAt = new Date(clip.publishedAt || "");
+    if (Number.isNaN(publishedAt.getTime())) return map;
+    const date = publishedAt.toISOString().slice(0, 10);
+    const current = map.get(date) || {
+      date,
+      label: formatTrendLabel(date),
+      vv: 0,
+      clipCount: 0,
+      source: "live-platform-search"
+    };
+    current.vv += Number(clip.views || clip.score || 0);
+    current.clipCount += 1;
+    map.set(date, current);
+    return map;
+  }, new Map());
+
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
 const cultureProfiles = {
   Mexico: {
     identity: "墨西哥足球常带有强烈的节奏感、街头足球气质和主场声浪，绿色球衣与鹰蛇纹章是非常鲜明的国家符号。",
@@ -920,13 +941,15 @@ app.post("/api/translate", async (request, response) => {
 app.get("/api/hashtag-trends", async (_request, response) => {
   await ensureScheduleFresh();
   const { clips, sources } = await getHashtagTrendClips();
+  const observedPoints = buildObservedTrendPoints(clips);
   response.json({
     hashtags: ["#WorldCup2026", "#FIFAWorldCup", "#WeAre26"],
-    mode: clips.length ? "projection-with-live-clips" : "schedule-projection",
+    mode: observedPoints.length ? "projection-and-observed-vv" : "schedule-projection",
     pointSource: "schedule-projection",
     clipSource: "live-platform-search",
-    explanation: "The line is a schedule-based heat projection across tournament dates. Video dots and cards are live published-content VV from TikTok, Instagram, and YouTube.",
+    explanation: "Dashed line is a schedule-based VV projection. Solid line is observed published-content VV from TikTok, Instagram, and YouTube.",
     points: buildTrendProjection(),
+    observedPoints,
     clips,
     sources,
     updatedAt: new Date().toISOString()
