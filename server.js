@@ -5,10 +5,12 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 
 const PORT = Number(process.env.PORT || 4173);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, "public");
+const SCHEDULE_SNAPSHOT_PATH = path.join(__dirname, "data", "schedule-snapshot.json");
 const WORLDCUP_API_BASE = process.env.WORLDCUP_API_BASE || "https://worldcup26.ir";
 const REFRESH_MS = Number(process.env.REFRESH_MS || 1000 * 60 * 5);
 const INSIGHTS_TTL_MS = Number(process.env.INSIGHTS_TTL_MS || 1000 * 60 * 8);
@@ -56,64 +58,24 @@ const scheduleCache = {
 const insightsCache = new Map();
 const translationCache = new Map();
 
-const fallbackSchedule = {
-  source: "local-fallback",
-  matches: [
-    {
-      id: "1",
-      matchNo: 1,
-      homeTeam: "Mexico",
-      awayTeam: "South Africa",
-      group: "A",
-      stage: "Group A",
-      type: "group",
-      matchday: "1",
-      localDate: "06/11/2026 13:00",
-      venue: "Estadio Azteca",
-      city: "Mexico City",
-      country: "Mexico",
-      status: "notstarted",
-      homeScore: 0,
-      awayScore: 0
-    },
-    {
-      id: "2",
-      matchNo: 2,
-      homeTeam: "South Korea",
-      awayTeam: "Czech Republic",
-      group: "A",
-      stage: "Group A",
-      type: "group",
-      matchday: "1",
-      localDate: "06/11/2026 20:00",
-      venue: "Estadio Akron",
-      city: "Guadalajara",
-      country: "Mexico",
-      status: "notstarted",
-      homeScore: 0,
-      awayScore: 0
-    },
-    {
-      id: "3",
-      matchNo: 3,
-      homeTeam: "Canada",
-      awayTeam: "Bosnia and Herzegovina",
-      group: "B",
-      stage: "Group B",
-      type: "group",
-      matchday: "1",
-      localDate: "06/12/2026 15:00",
-      venue: "BMO Field",
-      city: "Toronto",
-      country: "Canada",
-      status: "notstarted",
-      homeScore: 0,
-      awayScore: 0
+function loadScheduleSnapshot() {
+  try {
+    const snapshot = JSON.parse(readFileSync(SCHEDULE_SNAPSHOT_PATH, "utf8"));
+    if (!Array.isArray(snapshot.matches) || snapshot.matches.length < 100) {
+      throw new Error("schedule snapshot is incomplete");
     }
-  ],
-  teams: [],
-  stadiums: []
-};
+    return {
+      matches: snapshot.matches,
+      teams: snapshot.teams || [],
+      stadiums: snapshot.stadiums || []
+    };
+  } catch (error) {
+    console.warn(`Schedule snapshot unavailable: ${error.message}`);
+    return { matches: [], teams: [], stadiums: [] };
+  }
+}
+
+const fallbackSchedule = loadScheduleSnapshot();
 
 function withTimeout(ms = 10000) {
   const controller = new AbortController();
@@ -221,7 +183,7 @@ async function refreshSchedule() {
       scheduleCache.data = fallbackSchedule;
     }
     scheduleCache.updatedAt = scheduleCache.updatedAt || new Date().toISOString();
-    scheduleCache.source = scheduleCache.data.matches.length ? `${scheduleCache.source} + fallback` : "local-fallback";
+    scheduleCache.source = scheduleCache.data.matches.length ? "bundled-2026-schedule-snapshot" : "empty-fallback";
     scheduleCache.error = error.message;
   }
 }
