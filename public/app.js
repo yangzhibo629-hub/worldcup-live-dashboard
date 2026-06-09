@@ -8,6 +8,7 @@ const state = {
   activeDetailTab: "news",
   activeInsights: null,
   activeProfile: null,
+  playerSelfiePrompt: null,
   promptMode: "cinematic poster",
   referenceImageNote: "",
   trendData: null,
@@ -448,7 +449,7 @@ function renderSummary(summary) {
   return `
     <section class="ai-summary">
       <div>
-        <span>AI 摘要</span>
+        <span>看点 / 投稿灵感</span>
         <strong>${escapeHtml(summary.headline)}</strong>
       </div>
       <ul>
@@ -456,6 +457,41 @@ function renderSummary(summary) {
       </ul>
       <div class="watchlist">
         ${(summary.watchlist || []).map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderPlayerGrid(profile) {
+  const players = profile.players || [];
+  if (!players.length) return "";
+  return `
+    <section class="culture-card">
+      <h3>球队成员</h3>
+      <p class="detail-sub">展示代表球员/成员参考，点击任意成员可生成“和 TA 的 AI 合照” prompt。</p>
+      <div class="player-grid">
+        ${players.map((player) => `
+          <button type="button" class="player-card" data-player-name="${escapeHtml(player.name)}">
+            <span class="player-avatar tone-${player.avatarTone || 0}">${escapeHtml(player.initials || "XI")}</span>
+            <strong>${escapeHtml(player.name)}</strong>
+            <small>${escapeHtml(player.role || "Player")}</small>
+          </button>
+        `).join("")}
+      </div>
+      <p class="player-note">注：最终 2026 参赛名单未公布时，这里作为内容创作参考，不等同于官方最终名单。</p>
+    </section>
+  `;
+}
+
+function renderPlayerPrompt() {
+  if (!state.playerSelfiePrompt) return "";
+  return `
+    <section class="culture-card player-prompt-card">
+      <h3>AI 合照 Prompt</h3>
+      <p class="detail-sub">已为 ${escapeHtml(state.playerSelfiePrompt.player)} 生成，可直接复制到图片生成工具里使用。</p>
+      <textarea readonly>${escapeHtml(state.playerSelfiePrompt.prompt)}</textarea>
+      <div class="prompt-actions">
+        <button class="copy-prompt" type="button" data-copy-player-prompt>复制合照 Prompt</button>
       </div>
     </section>
   `;
@@ -570,6 +606,8 @@ function renderTeamProfile(profile) {
         ${(profile.symbols || []).map((symbol) => `<span>${escapeHtml(symbol)}</span>`).join("")}
       </div>
     </section>
+    ${renderPlayerGrid(profile)}
+    ${renderPlayerPrompt()}
     <section class="culture-card">
       <h3>助力创作 Prompt</h3>
       ${renderPromptTools(profile)}
@@ -591,6 +629,7 @@ function renderTeamProfile(profile) {
 async function showTeamProfile(name) {
   state.promptMode = "cinematic poster";
   state.referenceImageNote = "";
+  state.playerSelfiePrompt = null;
   els.drawer.classList.add("open");
   els.matchDetail.className = "match-detail";
   els.matchDetail.innerHTML = `<div class="loader">正在生成 ${escapeHtml(name)} 的球队文化画像</div>`;
@@ -610,6 +649,18 @@ async function refreshPrompt() {
   });
   const data = await fetchJson(`/api/teams/${encodeURIComponent(state.activeProfile.name)}/prompt?${params}`);
   state.activeProfile.prompt = data.prompt;
+  renderTeamProfile(state.activeProfile);
+}
+
+async function generatePlayerSelfiePrompt(playerName) {
+  if (!state.activeProfile) return;
+  state.playerSelfiePrompt = {
+    player: playerName,
+    prompt: "正在生成合照 Prompt..."
+  };
+  renderTeamProfile(state.activeProfile);
+  const data = await fetchJson(`/api/teams/${encodeURIComponent(state.activeProfile.name)}/players/${encodeURIComponent(playerName)}/prompt`);
+  state.playerSelfiePrompt = data;
   renderTeamProfile(state.activeProfile);
 }
 
@@ -710,9 +761,31 @@ els.matchDetail.addEventListener("click", (event) => {
     return;
   }
 
+  const player = event.target.closest("[data-player-name]");
+  if (player) {
+    generatePlayerSelfiePrompt(player.dataset.playerName).catch((error) => {
+      state.playerSelfiePrompt = {
+        player: player.dataset.playerName,
+        prompt: `生成失败：${error.message}`
+      };
+      renderTeamProfile(state.activeProfile);
+    });
+    return;
+  }
+
+  const copyPlayer = event.target.closest("[data-copy-player-prompt]");
+  if (copyPlayer) {
+    const card = copyPlayer.closest(".player-prompt-card");
+    const textarea = card?.querySelector("textarea");
+    navigator.clipboard?.writeText(textarea?.value || "");
+    copyPlayer.textContent = "已复制";
+    return;
+  }
+
   const copy = event.target.closest("[data-copy-prompt]");
   if (copy) {
-    const textarea = els.matchDetail.querySelector("textarea");
+    const card = copy.closest(".culture-card") || els.matchDetail;
+    const textarea = card.querySelector("textarea");
     navigator.clipboard?.writeText(textarea?.value || "");
     copy.textContent = "已复制";
     return;

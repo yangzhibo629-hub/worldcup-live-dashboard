@@ -524,33 +524,33 @@ function buildAISummary(match, news, social, hotspots) {
   const topSocial = social
     .filter((item) => item.title)
     .sort((a, b) => (b.socialRankScore || 0) - (a.socialRankScore || 0))
-    .slice(0, 2);
+    .slice(0, 3);
   const topHotspots = hotspots.slice(0, 3).map((topic) => topic.name);
   const matchup = `${match.homeTeam} vs ${match.awayTeam}`;
 
   const bullets = [];
   if (news.length) {
-    bullets.push(`当前围绕 ${matchup} 已聚合 ${news.length} 条新闻，主要关注赛前展望、球队状态和赛事背景。`);
+    bullets.push(`看点：${match.stage} 的 ${matchup} 适合围绕双方国家文化、球迷入场、赛前预测和城市氛围做内容切入。`);
   } else {
-    bullets.push(`${matchup} 的相关新闻还不多，临近比赛日后信息密度会明显提升。`);
+    bullets.push(`看点：${matchup} 当前公开新闻还不密集，可以先做赛前氛围、队旗配色、球迷预测类投稿。`);
   }
   if (topHotspots.length) {
-    bullets.push(`热度最高的议题集中在：${topHotspots.join("、")}。`);
+    bullets.push(`热点：当前可借势的话题集中在 ${topHotspots.join("、")}，适合做短视频标题和封面关键词。`);
   } else {
-    bullets.push("目前还没有形成特别集中的热点议题，适合持续观察后续变化。");
+    bullets.push("热点：暂未形成强集中议题，建议用“谁会赢”“球迷反应”“主场城市一日游”等轻量选题先铺量。");
   }
   if (topSocial.length) {
-    bullets.push(`公开讨论里最活跃的反馈来自 ${[...new Set(topSocial.map((item) => item.network))].join("、")}，话题更偏球迷预测和情绪表达。`);
+    bullets.push(`投稿角度：社交平台较活跃的内容来自 ${[...new Set(topSocial.map((item) => item.network))].join("、")}，可参考高 VV 内容做“预测 + 情绪反应 + 国旗视觉”的组合。`);
   }
   if (outlets.length) {
-    bullets.push(`新闻来源覆盖 ${outlets.join("、")} 等媒体，可点击原文进一步核验。`);
+    bullets.push(`核验素材：新闻来源覆盖 ${outlets.join("、")} 等媒体，适合提炼赛前事实点，避免只做空泛情绪内容。`);
   }
 
   return {
-    headline: `${matchup}：赛前信息雷达`,
+    headline: `${matchup}：本场看点与投稿灵感`,
     bullets: bullets.slice(0, 4),
-    watchlist: topHotspots.length ? topHotspots : ["球队名单", "赛前发布会", "球迷反馈"],
-    generatedBy: "local-news-summarizer"
+    watchlist: topHotspots.length ? topHotspots : ["赛前预测", "球迷反应", "国旗视觉", "城市氛围"],
+    generatedBy: "local-match-creative-brief"
   };
 }
 
@@ -747,6 +747,142 @@ const cultureProfiles = {
   }
 };
 
+const playerProfiles = {
+  Mexico: [
+    ["Santiago Gimenez", "Forward"],
+    ["Hirving Lozano", "Winger"],
+    ["Edson Alvarez", "Midfielder"],
+    ["Raul Jimenez", "Forward"],
+    ["Guillermo Ochoa", "Goalkeeper"]
+  ],
+  "South Africa": [
+    ["Ronwen Williams", "Goalkeeper"],
+    ["Percy Tau", "Forward"],
+    ["Teboho Mokoena", "Midfielder"],
+    ["Themba Zwane", "Midfielder"],
+    ["Lyle Foster", "Forward"]
+  ],
+  Canada: [
+    ["Alphonso Davies", "Left back"],
+    ["Jonathan David", "Forward"],
+    ["Tajon Buchanan", "Winger"],
+    ["Stephen Eustaquio", "Midfielder"],
+    ["Cyle Larin", "Forward"]
+  ],
+  "United States": [
+    ["Christian Pulisic", "Winger"],
+    ["Weston McKennie", "Midfielder"],
+    ["Tyler Adams", "Midfielder"],
+    ["Gio Reyna", "Attacking midfielder"],
+    ["Folarin Balogun", "Forward"]
+  ],
+  Brazil: [
+    ["Vinicius Junior", "Winger"],
+    ["Rodrygo", "Forward"],
+    ["Endrick", "Forward"],
+    ["Bruno Guimaraes", "Midfielder"],
+    ["Alisson Becker", "Goalkeeper"]
+  ],
+  Argentina: [
+    ["Lionel Messi", "Forward"],
+    ["Julian Alvarez", "Forward"],
+    ["Lautaro Martinez", "Forward"],
+    ["Enzo Fernandez", "Midfielder"],
+    ["Emiliano Martinez", "Goalkeeper"]
+  ],
+  France: [
+    ["Kylian Mbappe", "Forward"],
+    ["Antoine Griezmann", "Forward"],
+    ["Aurelien Tchouameni", "Midfielder"],
+    ["Eduardo Camavinga", "Midfielder"],
+    ["Mike Maignan", "Goalkeeper"]
+  ],
+  England: [
+    ["Harry Kane", "Forward"],
+    ["Jude Bellingham", "Midfielder"],
+    ["Bukayo Saka", "Winger"],
+    ["Phil Foden", "Attacking midfielder"],
+    ["Declan Rice", "Midfielder"]
+  ],
+  Portugal: [
+    ["Cristiano Ronaldo", "Forward"],
+    ["Bruno Fernandes", "Midfielder"],
+    ["Bernardo Silva", "Midfielder"],
+    ["Rafael Leao", "Winger"],
+    ["Diogo Costa", "Goalkeeper"]
+  ],
+  Germany: [
+    ["Florian Wirtz", "Attacking midfielder"],
+    ["Jamal Musiala", "Attacking midfielder"],
+    ["Kai Havertz", "Forward"],
+    ["Joshua Kimmich", "Midfielder"],
+    ["Manuel Neuer", "Goalkeeper"]
+  ],
+  Spain: [
+    ["Lamine Yamal", "Winger"],
+    ["Pedri", "Midfielder"],
+    ["Gavi", "Midfielder"],
+    ["Nico Williams", "Winger"],
+    ["Rodri", "Midfielder"]
+  ],
+  Netherlands: [
+    ["Virgil van Dijk", "Defender"],
+    ["Frenkie de Jong", "Midfielder"],
+    ["Cody Gakpo", "Forward"],
+    ["Xavi Simons", "Attacking midfielder"],
+    ["Denzel Dumfries", "Defender"]
+  ],
+  Japan: [
+    ["Kaoru Mitoma", "Winger"],
+    ["Takefusa Kubo", "Winger"],
+    ["Wataru Endo", "Midfielder"],
+    ["Takumi Minamino", "Forward"],
+    ["Zion Suzuki", "Goalkeeper"]
+  ],
+  "South Korea": [
+    ["Son Heung-min", "Forward"],
+    ["Kim Min-jae", "Defender"],
+    ["Lee Kang-in", "Midfielder"],
+    ["Hwang Hee-chan", "Forward"],
+    ["Cho Gue-sung", "Forward"]
+  ],
+  Morocco: [
+    ["Achraf Hakimi", "Defender"],
+    ["Hakim Ziyech", "Winger"],
+    ["Sofyan Amrabat", "Midfielder"],
+    ["Youssef En-Nesyri", "Forward"],
+    ["Bono", "Goalkeeper"]
+  ],
+  Belgium: [
+    ["Kevin De Bruyne", "Midfielder"],
+    ["Romelu Lukaku", "Forward"],
+    ["Jeremy Doku", "Winger"],
+    ["Youri Tielemans", "Midfielder"],
+    ["Thibaut Courtois", "Goalkeeper"]
+  ],
+  Croatia: [
+    ["Luka Modric", "Midfielder"],
+    ["Josko Gvardiol", "Defender"],
+    ["Mateo Kovacic", "Midfielder"],
+    ["Marcelo Brozovic", "Midfielder"],
+    ["Andrej Kramaric", "Forward"]
+  ],
+  Uruguay: [
+    ["Federico Valverde", "Midfielder"],
+    ["Darwin Nunez", "Forward"],
+    ["Ronald Araujo", "Defender"],
+    ["Manuel Ugarte", "Midfielder"],
+    ["Luis Suarez", "Forward"]
+  ],
+  Norway: [
+    ["Erling Haaland", "Forward"],
+    ["Martin Odegaard", "Midfielder"],
+    ["Alexander Sorloth", "Forward"],
+    ["Oscar Bobb", "Winger"],
+    ["Orjan Nyland", "Goalkeeper"]
+  ]
+};
+
 function findTeamByName(name = "") {
   const normalized = name.toLowerCase();
   return scheduleCache.data.teams.find((team) => {
@@ -756,6 +892,37 @@ function findTeamByName(name = "") {
 
 function getTeamMatches(teamName) {
   return scheduleCache.data.matches.filter((match) => match.homeTeam === teamName || match.awayTeam === teamName);
+}
+
+function avatarSeed(name = "") {
+  return String(name)
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "XI";
+}
+
+function buildFallbackPlayers(teamName) {
+  return [
+    [`${teamName} Captain`, "Captain"],
+    [`${teamName} Striker`, "Forward"],
+    [`${teamName} Playmaker`, "Midfielder"],
+    [`${teamName} Defender`, "Defender"],
+    [`${teamName} Goalkeeper`, "Goalkeeper"]
+  ];
+}
+
+function buildTeamPlayers(teamName) {
+  const roster = playerProfiles[teamName] || buildFallbackPlayers(teamName);
+  return roster.map(([name, role], index) => ({
+    id: `${teamName}-${name}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+    name,
+    role,
+    initials: avatarSeed(name),
+    avatarTone: index % 5,
+    note: playerProfiles[teamName] ? "代表球员参考，非 2026 最终名单" : "成员角色占位，可用于创作 prompt"
+  }));
 }
 
 function buildTeamProfile(name) {
@@ -781,7 +948,8 @@ function buildTeamProfile(name) {
       venue: match.venue
     })),
     visualStyle: profile.visualStyle,
-    prompt: buildSupportPrompt(teamName, profile.visualStyle, "cinematic poster")
+    prompt: buildSupportPrompt(teamName, profile.visualStyle, "cinematic poster"),
+    players: buildTeamPlayers(teamName)
   };
 }
 
@@ -793,6 +961,12 @@ function buildSupportPrompt(teamName, visualStyle, mode = "cinematic poster", re
     "street celebration": "a street celebration scene with authentic local supporters"
   };
   return `Create ${modeMap[mode] || modeMap["cinematic poster"]} for ${teamName}. Feature ${visualStyle}. Show passionate fans lifting scarves and flags, authentic national colors, dynamic stadium floodlights, confetti, dramatic sports photography, high detail, editorial composition, no text, no logos, suitable for AI image or video generation.${referenceNote ? ` Use the uploaded reference image as visual guidance for ${referenceNote}.` : ""}`;
+}
+
+function buildPlayerSelfiePrompt(teamName, playerName, role = "football player") {
+  const profile = cultureProfiles[teamName] || {};
+  const visualStyle = profile.visualStyle || "authentic national colors, energetic stadium atmosphere, football supporter culture";
+  return `Create a realistic AI fan selfie with ${playerName}, ${role} for ${teamName}. Show the user standing beside the player in a lively World Cup stadium concourse, both smiling naturally, wearing ${teamName} inspired colors, soft cinematic lighting, handheld phone selfie perspective, authentic crowd energy, ${visualStyle}, high-detail portrait photography, respectful likeness, no text, no logos, suitable for AI image generation.`;
 }
 
 function hasChinese(text = "") {
@@ -919,6 +1093,21 @@ app.get("/api/teams/:name/prompt", async (request, response) => {
   response.json({
     name: profile.name,
     prompt: buildSupportPrompt(profile.name, profile.visualStyle, mode, referenceNote)
+  });
+});
+
+app.get("/api/teams/:name/players/:playerName/prompt", async (request, response) => {
+  await ensureScheduleFresh();
+  const profile = buildTeamProfile(request.params.name);
+  const playerName = request.params.playerName;
+  const player = (profile.players || []).find((item) => item.name.toLowerCase() === playerName.toLowerCase()) || {
+    name: playerName,
+    role: "football player"
+  };
+  response.json({
+    team: profile.name,
+    player: player.name,
+    prompt: buildPlayerSelfiePrompt(profile.name, player.name, player.role)
   });
 });
 

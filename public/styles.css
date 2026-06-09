@@ -1148,6 +1148,94 @@ h1 {
   color: var(--chalk);
 }
 
+.player-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.player-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 10px;
+  min-height: 76px;
+  border: 1px solid rgba(27, 26, 22, 0.12);
+  background:
+    linear-gradient(135deg, rgba(246, 193, 63, 0.14), rgba(255, 255, 255, 0.64));
+  color: var(--ink);
+  cursor: pointer;
+  padding: 10px;
+  text-align: left;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.player-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(218, 65, 39, 0.4);
+  box-shadow: 0 12px 28px rgba(55, 45, 25, 0.1);
+}
+
+.player-avatar {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 2px solid rgba(255, 255, 255, 0.65);
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--pitch-2), var(--sun));
+  color: var(--chalk);
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  box-shadow: 0 10px 18px rgba(55, 45, 25, 0.14);
+}
+
+.player-avatar.tone-1 {
+  background: linear-gradient(135deg, var(--ember), var(--sun));
+}
+
+.player-avatar.tone-2 {
+  background: linear-gradient(135deg, #276f88, var(--pitch-2));
+}
+
+.player-avatar.tone-3 {
+  background: linear-gradient(135deg, #171716, #6d7b47);
+}
+
+.player-avatar.tone-4 {
+  background: linear-gradient(135deg, #f6c13f, #0f8b74);
+}
+
+.player-card strong,
+.player-card small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-card strong {
+  font-size: 14px;
+}
+
+.player-card small,
+.player-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.player-note {
+  margin: 10px 0 0;
+}
+
+.player-prompt-card {
+  border-color: rgba(218, 65, 39, 0.28);
+  background:
+    linear-gradient(135deg, rgba(218, 65, 39, 0.08), rgba(255, 255, 255, 0.64));
+}
+
 .culture-card textarea {
   width: 100%;
   min-height: 138px;
