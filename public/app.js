@@ -76,6 +76,16 @@ function formatTime(value, fallback) {
   }).format(date);
 }
 
+function formatAxisDate(value) {
+  if (!value) return "";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "numeric",
+    day: "numeric"
+  }).format(date);
+}
+
 function relativeTime(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -164,6 +174,55 @@ function flagImg(url, name) {
   return `<img src="${escapeHtml(url)}" alt="${escapeHtml(name)} flag" loading="lazy" />`;
 }
 
+function scoreValue(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function getResultState(match) {
+  const homeScore = scoreValue(match.homeScore);
+  const awayScore = scoreValue(match.awayScore);
+  const status = String(match.status || "").toLowerCase();
+  const hasExplicitFinish = match.finished === true || ["true", "finished", "fulltime", "full-time", "ft", "ended"].some((token) => status.includes(token));
+  const hasLiveSignal = ["live", "playing", "inprogress", "in-progress", "halftime", "half-time", "ht"].some((token) => status.includes(token)) || Number(status) > 0;
+  const hasScore = hasExplicitFinish || hasLiveSignal || homeScore > 0 || awayScore > 0;
+  const winner = hasExplicitFinish && homeScore !== awayScore
+    ? homeScore > awayScore ? "home" : "away"
+    : "";
+  const isDraw = hasExplicitFinish && homeScore === awayScore;
+
+  return {
+    homeScore,
+    awayScore,
+    hasScore,
+    winner,
+    isDraw,
+    label: hasExplicitFinish ? "完赛" : hasLiveSignal ? "进行中" : ""
+  };
+}
+
+function renderTeamLine(match, side, result) {
+  const isHome = side === "home";
+  const team = isHome ? match.homeTeam : match.awayTeam;
+  const flag = isHome ? match.homeFlag : match.awayFlag;
+  const score = isHome ? result.homeScore : result.awayScore;
+  const isWinner = result.winner === side;
+  const classes = [
+    "team-line",
+    result.isDraw ? "draw" : "",
+    isWinner ? "winner" : "",
+    result.hasScore ? "has-score" : ""
+  ].filter(Boolean).join(" ");
+
+  return `
+    <div class="${classes}">
+      ${flagImg(flag, team)}
+      <span>${escapeHtml(team)}</span>
+      ${result.hasScore ? `<strong class="team-score" aria-label="${escapeHtml(team)} score">${score}</strong>` : ""}
+    </div>
+  `;
+}
+
 function renderTimeline() {
   if (!state.filtered.length) {
     els.timeline.innerHTML = `<div class="loader">没有匹配的赛事</div>`;
@@ -174,19 +233,23 @@ function renderTimeline() {
   els.timeline.innerHTML = [...grouped.entries()].map(([day, matches]) => `
     <div class="day-column">
       <div class="day-label">${escapeHtml(formatDateLabel(matches[0]?.dateIso || day))}</div>
-      ${matches.map((match) => `
-        <button class="match-node ${state.selectedId === match.id ? "active" : ""}" type="button" data-match-id="${match.id}">
+      ${matches.map((match) => {
+        const result = getResultState(match);
+        return `
+        <button class="match-node ${state.selectedId === match.id ? "active" : ""} ${result.winner ? "result-final has-winner" : ""} ${result.isDraw ? "result-final result-draw" : ""} ${result.hasScore && !result.winner && !result.isDraw ? "result-live" : ""}" type="button" data-match-id="${match.id}">
           <div class="match-meta">
             <span>#${match.matchNo || match.id} · ${escapeHtml(match.stage)}</span>
-            <span>${escapeHtml(formatTime(match.dateIso, match.localDate))}</span>
+            <span>${result.label ? `<b class="result-label">${escapeHtml(result.label)}</b>` : escapeHtml(formatTime(match.dateIso, match.localDate))}</span>
           </div>
           <div class="teams">
-            <div class="team-line">${flagImg(match.homeFlag, match.homeTeam)}<span>${escapeHtml(match.homeTeam)}</span></div>
-            <div class="team-line">${flagImg(match.awayFlag, match.awayTeam)}<span>${escapeHtml(match.awayTeam)}</span></div>
+            ${renderTeamLine(match, "home", result)}
+            ${renderTeamLine(match, "away", result)}
           </div>
+          ${result.hasScore ? `<div class="result-strip">${result.winner ? "胜者已高亮" : result.isDraw ? "平局" : "比分更新"} · ${result.homeScore} : ${result.awayScore}</div>` : ""}
           <p class="venue">${escapeHtml([match.venue, match.city].filter(Boolean).join(" · "))}</p>
         </button>
-      `).join("")}
+      `;
+      }).join("")}
     </div>
   `).join("");
 }
@@ -232,28 +295,62 @@ function renderTrendMonitor() {
   if (!data) return;
   const points = data.points || [];
   const clips = data.clips || [];
-  const width = 360;
-  const height = 128;
-  const values = points.map((point) => point.vv || 0);
+  const width = 1600;
+  const height = 164;
+  const left = 48;
+  const right = 28;
+  const top = 20;
+  const plotBottom = 118;
+  const axisY = 132;
+  const labelY = 152;
+  const values = points.length ? points.map((point) => point.vv || 0) : [0];
   const min = Math.min(...values);
   const max = Math.max(...values);
+  const dateValues = points
+    .map((point) => new Date(`${point.date}T00:00:00`).getTime())
+    .filter((value) => !Number.isNaN(value));
+  const minDate = dateValues.length ? Math.min(...dateValues) : Date.UTC(2026, 5, 11);
+  const maxDate = dateValues.length ? Math.max(...dateValues) : Date.UTC(2026, 6, 19);
+  const xForTime = (time) => {
+    const safeTime = Number.isNaN(time) ? minDate : Math.min(Math.max(time, minDate), maxDate);
+    if (maxDate === minDate) return left;
+    return left + ((safeTime - minDate) / (maxDate - minDate)) * (width - left - right);
+  };
   const scaleY = (value) => {
-    if (max === min) return 64;
-    return 104 - ((value - min) / (max - min)) * 72;
+    if (max === min) return (top + plotBottom) / 2;
+    return plotBottom - ((value - min) / (max - min)) * (plotBottom - top);
   };
   const pointXY = points.map((point, index) => {
-    const x = points.length <= 1 ? 20 : 18 + (index / (points.length - 1)) * (width - 36);
+    const dateTime = new Date(`${point.date}T00:00:00`).getTime();
+    const x = dateValues.length ? xForTime(dateTime) : points.length <= 1 ? left : left + (index / (points.length - 1)) * (width - left - right);
     const y = scaleY(point.vv || 0);
     return { ...point, x, y };
   });
+  const nearestPoint = (x) => pointXY.reduce((nearest, point) => {
+    if (!nearest) return point;
+    return Math.abs(point.x - x) < Math.abs(nearest.x - x) ? point : nearest;
+  }, null);
   const path = pointXY.map((point, index) => `${index ? "L" : "M"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
-  const clipDots = clips.slice(0, 6).map((clip, index) => {
-    const anchor = pointXY[index % Math.max(pointXY.length, 1)] || { x: 24, y: 64 };
-    const x = anchor.x + Math.min(index * 8, 28);
-    const y = Math.max(18, anchor.y - 12 - (index % 2) * 12);
+  const tickIndexes = points.length
+    ? [...new Set([0, Math.floor(points.length * 0.25), Math.floor(points.length * 0.5), Math.floor(points.length * 0.75), points.length - 1])]
+    : [];
+  const axisTicks = tickIndexes.map((index) => {
+    const point = pointXY[index];
+    return point ? `
+      <g class="trend-axis-tick">
+        <line x1="${point.x.toFixed(1)}" y1="${axisY - 6}" x2="${point.x.toFixed(1)}" y2="${axisY + 4}" />
+        <text x="${point.x.toFixed(1)}" y="${labelY}">${escapeHtml(formatAxisDate(point.date) || point.label || "")}</text>
+      </g>
+    ` : "";
+  }).join("");
+  const clipDots = clips.slice(0, 8).map((clip, index) => {
+    const publishedTime = new Date(clip.publishedAt || "").getTime();
+    const x = xForTime(publishedTime);
+    const anchor = nearestPoint(x) || { y: 70 };
+    const y = Math.max(top + 7, Math.min(plotBottom - 7, anchor.y - 12 - (index % 3) * 8));
     return `
       <a href="${escapeHtml(clip.url)}" target="_blank" rel="noreferrer">
-        <circle class="clip-dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${index < 3 ? 5 : 4}">
+        <circle class="clip-dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${index < 3 ? 7 : 5}">
           <title>${escapeHtml(clip.network)} · ${formatVV(clip.views || clip.score)} VV · ${escapeHtml(clip.title)}</title>
         </circle>
       </a>
@@ -270,10 +367,12 @@ function renderTrendMonitor() {
           <stop offset="1" stop-color="#0f8b74" />
         </linearGradient>
       </defs>
-      <path class="trend-grid" d="M 18 104 H 344 M 18 68 H 344 M 18 32 H 344" />
+      <path class="trend-grid" d="M ${left} ${plotBottom} H ${width - right} M ${left} ${(top + plotBottom) / 2} H ${width - right} M ${left} ${top} H ${width - right}" />
+      <path class="trend-axis" d="M ${left} ${axisY} H ${width - right}" />
       <path class="trend-line" d="${path}" />
-      ${pointXY.map((point, index) => index % 5 === 0 ? `<circle class="trend-point" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="2.5"><title>${escapeHtml(point.label)} · ${formatVV(point.vv)} VV</title></circle>` : "").join("")}
+      ${pointXY.map((point, index) => index % 5 === 0 ? `<circle class="trend-point" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="3"><title>${escapeHtml(point.label)} · ${formatVV(point.vv)} VV</title></circle>` : "").join("")}
       ${clipDots}
+      ${axisTicks}
     </svg>
     <div class="trend-window" style="left:${Math.round(state.trendProgress * 100)}%"></div>
   `;

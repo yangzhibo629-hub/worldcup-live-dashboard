@@ -188,6 +188,14 @@ async function refreshSchedule() {
   }
 }
 
+async function ensureScheduleFresh() {
+  const lastUpdated = scheduleCache.updatedAt ? new Date(scheduleCache.updatedAt).getTime() : 0;
+  const isStale = !lastUpdated || Date.now() - lastUpdated > REFRESH_MS;
+  if (!scheduleCache.data.matches.length || isStale) {
+    await refreshSchedule();
+  }
+}
+
 function cleanText(text = "") {
   return String(text)
     .replace(/<[^>]*>/g, " ")
@@ -757,7 +765,7 @@ function findMatch(id) {
 }
 
 app.get("/api/schedule", async (_request, response) => {
-  if (!scheduleCache.data.matches.length) await refreshSchedule();
+  await ensureScheduleFresh();
   response.json({
     ...scheduleCache.data,
     meta: {
@@ -770,7 +778,7 @@ app.get("/api/schedule", async (_request, response) => {
 });
 
 app.get("/api/matches/:id/insights", async (request, response) => {
-  if (!scheduleCache.data.matches.length) await refreshSchedule();
+  await ensureScheduleFresh();
   const match = findMatch(request.params.id);
   if (!match) {
     response.status(404).json({ error: "Match not found" });
@@ -836,12 +844,12 @@ app.get("/api/matches/:id/insights", async (request, response) => {
 });
 
 app.get("/api/teams/:name/profile", async (request, response) => {
-  if (!scheduleCache.data.matches.length) await refreshSchedule();
+  await ensureScheduleFresh();
   response.json(buildTeamProfile(request.params.name));
 });
 
 app.get("/api/teams/:name/prompt", async (request, response) => {
-  if (!scheduleCache.data.matches.length) await refreshSchedule();
+  await ensureScheduleFresh();
   const profile = buildTeamProfile(request.params.name);
   const mode = request.query.mode || "cinematic poster";
   const referenceNote = request.query.referenceNote || "";
@@ -868,7 +876,7 @@ app.post("/api/translate", async (request, response) => {
 });
 
 app.get("/api/hashtag-trends", async (_request, response) => {
-  if (!scheduleCache.data.matches.length) await refreshSchedule();
+  await ensureScheduleFresh();
   const { clips, sources } = await getHashtagTrendClips();
   response.json({
     hashtags: ["#WorldCup2026", "#FIFAWorldCup", "#WeAre26"],
