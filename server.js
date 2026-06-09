@@ -3,8 +3,12 @@ import cors from "cors";
 import Parser from "rss-parser";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const PORT = Number(process.env.PORT || 4173);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PUBLIC_DIR = path.join(__dirname, "public");
 const WORLDCUP_API_BASE = process.env.WORLDCUP_API_BASE || "https://worldcup26.ir";
 const REFRESH_MS = Number(process.env.REFRESH_MS || 1000 * 60 * 5);
 const INSIGHTS_TTL_MS = Number(process.env.INSIGHTS_TTL_MS || 1000 * 60 * 8);
@@ -33,6 +37,14 @@ const rss = new Parser({
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static("public"));
+
+app.get("/", (_request, response) => {
+  response.sendFile(path.join(PUBLIC_DIR, "index.html"));
+});
+
+app.get(["/app.js", "/styles.css"], (request, response) => {
+  response.sendFile(path.join(PUBLIC_DIR, request.path.slice(1)));
+});
 
 const scheduleCache = {
   updatedAt: null,
