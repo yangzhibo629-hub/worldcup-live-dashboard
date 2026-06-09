@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: worldcup-live-dashboard
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TIKTOK_API_KEY
+        sync: false
+      - key: INSTAGRAM_API_KEY
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: WORLDCUP_API_BASE
+        value: https://worldcup26.ir
+      - key: SOCIAL_LOOKBACK_MS
+        value: 259200000
+      - key: TREND_LOOKBACK_MS
+        value: 2592000000

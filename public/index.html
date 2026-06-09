@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2026 World Cup Live Atlas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="topbar">
+        <div>
+          <p class="kicker">FIFA World Cup 2026 Live Match Atlas</p>
+          <h1>世界杯赛事全景雷达</h1>
+        </div>
+        <div class="status-pill" id="syncStatus">正在同步赛程</div>
+      </section>
+
+      <section class="insight-strip" aria-label="赛事状态概览">
+        <div class="mini-metric">
+          <span id="matchCount">0</span>
+          <p>已载入赛事</p>
+        </div>
+        <div class="mini-metric">
+          <span id="cityCount">0</span>
+          <p>承办城市</p>
+        </div>
+        <div class="mini-metric">
+          <span id="nextMatch">--</span>
+          <p>下一场</p>
+        </div>
+        <div class="mini-source">
+          <p>数据源</p>
+          <strong id="sourceName">等待同步</strong>
+          <small id="lastUpdated">--</small>
+        </div>
+      </section>
+
+      <section class="controls" aria-label="赛程筛选">
+        <label class="search-box">
+          <span>搜索</span>
+          <input id="searchInput" type="search" placeholder="球队、城市、场馆、小组" />
+        </label>
+        <div class="segmented" id="stageFilters" aria-label="阶段筛选"></div>
+        <button class="icon-button" id="refreshButton" type="button" title="立即刷新">
+          <span aria-hidden="true">↻</span>
+          <span class="sr-only">立即刷新</span>
+        </button>
+      </section>
+
+      <section class="dashboard">
+        <section class="atlas" aria-label="赛程全景图">
+          <div class="timeline-head">
+            <h2>赛程全景图</h2>
+            <p id="atlasHint">点击任意赛事节点查看新闻、热点事件和公开社交反馈。</p>
+          </div>
+          <aside class="trend-monitor expanded" id="trendMonitor" aria-label="世界杯 hashtag 热点监控">
+            <button class="trend-toggle" id="trendToggle" type="button" aria-expanded="true">
+              <span>Hashtag VV 监控</span>
+              <strong>收起</strong>
+            </button>
+            <div class="trend-panel" id="trendPanel">
+              <div class="trend-head">
+                <div>
+                  <p>World Cup Hashtags</p>
+                  <h2>用户投稿 VV 趋势</h2>
+                </div>
+                <span id="trendMode">同步中</span>
+              </div>
+              <div class="hashtag-row" id="hashtagRow"></div>
+              <div class="trend-chart" id="trendChart"></div>
+              <div class="trend-videos" id="trendVideos"></div>
+              <p class="trend-source" id="trendSource">等待视频平台数据源。</p>
+            </div>
+          </aside>
+          <div class="timeline" id="timeline"></div>
+        </section>
+      </section>
+    </main>
+
+    <aside class="drawer" id="drawer" aria-live="polite">
+      <div class="drawer-inner">
+        <button class="close-button" id="closeDrawer" type="button" title="关闭">×</button>
+        <div id="matchDetail" class="match-detail empty-state">
+          <h2>选择一场比赛</h2>
+          <p>赛事详情会在这里聚合展示。</p>
+        </div>
+      </div>
+    </aside>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
