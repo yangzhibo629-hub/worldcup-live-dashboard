@@ -419,7 +419,7 @@ function renderFeed(items, emptyText, type) {
         </a>
         ${item.summary ? `<em>${escapeHtml(item.summary)}</em>` : ""}
         <span>${escapeHtml(item.source || item.network || "")}${item.author ? ` · ${escapeHtml(item.author)}` : ""}</span>
-        <small>${escapeHtml(relativeTime(item.publishedAt))}${type === "social" ? ` · VV ${formatVV(item.views ?? item.score ?? item.likes ?? 0)}` : ""}</small>
+        <small>${escapeHtml(relativeTime(item.publishedAt))}${type === "social" ? ` · VV ${formatVV(item.socialVV ?? item.views ?? item.score ?? item.likes ?? 0)}${item.socialRankScore ? ` · 综合热度 ${formatVV(item.socialRankScore)}` : ""}` : ""}</small>
         <button class="translate-button" type="button" data-translate-text="${escapeHtml([item.title, item.summary].filter(Boolean).join(". "))}" data-translate-target="${type}-${index}">
           翻译
         </button>

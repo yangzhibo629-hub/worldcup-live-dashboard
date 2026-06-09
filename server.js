@@ -523,7 +523,7 @@ function buildAISummary(match, news, social, hotspots) {
   const outlets = [...new Set(titles.map(extractOutlet).filter(Boolean))].slice(0, 4);
   const topSocial = social
     .filter((item) => item.title)
-    .sort((a, b) => (b.score || b.likes || 0) - (a.score || a.likes || 0))
+    .sort((a, b) => (b.socialRankScore || 0) - (a.socialRankScore || 0))
     .slice(0, 2);
   const topHotspots = hotspots.slice(0, 3).map((topic) => topic.name);
   const matchup = `${match.homeTeam} vs ${match.awayTeam}`;
@@ -568,6 +568,50 @@ function isRecentSocialItem(item, now = Date.now()) {
   const publishedAt = new Date(item.publishedAt).getTime();
   if (Number.isNaN(publishedAt)) return false;
   return now - publishedAt >= 0 && now - publishedAt <= SOCIAL_LOOKBACK_MS;
+}
+
+function numberValue(value) {
+  const number = Number(value || 0);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function getSocialVV(item) {
+  return Math.max(
+    numberValue(item.views),
+    numberValue(item.viewCount),
+    numberValue(item.playCount),
+    numberValue(item.vv),
+    numberValue(item.score),
+    numberValue(item.likes)
+  );
+}
+
+function getSocialRankScore(item, now = Date.now()) {
+  const vv = getSocialVV(item);
+  const likes = numberValue(item.likes || item.score);
+  const comments = numberValue(item.comments || item.replies);
+  const reposts = numberValue(item.reposts || item.shares);
+  const publishedAt = new Date(item.publishedAt || 0).getTime();
+  const ageHours = Number.isNaN(publishedAt) ? 72 : Math.max(0, (now - publishedAt) / (1000 * 60 * 60));
+  const freshness = Math.exp(-ageHours / 72);
+  const engagement = likes * 2 + comments * 8 + reposts * 6;
+  const network = String(item.network || "").toLowerCase();
+  const platformBoost = /tiktok|instagram|youtube/.test(network) ? 1.12 : 1;
+
+  return Math.round((
+    Math.log10(vv + 1) * 48 +
+    Math.log10(engagement + 1) * 34 +
+    freshness * 28
+  ) * platformBoost);
+}
+
+function enrichSocialItem(item) {
+  const socialVV = getSocialVV(item);
+  return {
+    ...item,
+    socialVV,
+    socialRankScore: getSocialRankScore(item)
+  };
 }
 
 function buildTrendProjection() {
@@ -814,11 +858,9 @@ app.get("/api/matches/:id/insights", async (request, response) => {
   const social = [...reddit, ...bluesky, ...hackerNews, ...tiktok, ...instagram, ...youtube]
     .filter((item) => isRecentSocialItem(item))
     .filter((item) => isRelevantSocialItem(item, match))
-    .sort((a, b) => {
-      const aDate = new Date(a.publishedAt || 0).getTime();
-      const bDate = new Date(b.publishedAt || 0).getTime();
-      return bDate - aDate;
-    });
+    .map((item) => enrichSocialItem(item))
+    .filter((item) => item.socialVV >= 500)
+    .sort((a, b) => (b.socialRankScore || 0) - (a.socialRankScore || 0));
 
   const data = {
     match,
