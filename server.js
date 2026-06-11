@@ -215,6 +215,28 @@ function normalizeApiFootballStatus(status = {}) {
   };
 }
 
+async function fetchApiFootballEndpoint(params) {
+  const url = new URL("/fixtures", API_FOOTBALL_BASE);
+  Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      "x-apisports-key": API_FOOTBALL_KEY,
+      "User-Agent": "WorldCup2026LiveDashboard/1.0"
+    }
+  });
+  if (!response.ok) throw new Error(`API-FOOTBALL fixtures returned ${response.status}`);
+  return response.json();
+}
+
+function extractApiFootballError(payload) {
+  if (Array.isArray(payload.errors) && payload.errors.length) return payload.errors.join(", ");
+  if (payload.errors && typeof payload.errors === "object" && Object.keys(payload.errors).length) {
+    return JSON.stringify(payload.errors);
+  }
+  return "";
+}
+
 async function fetchApiFootballFixtures() {
   if (!API_FOOTBALL_KEY) {
     return { fixtures: [], source: "api-football:not-configured", error: "API_FOOTBALL_KEY is not configured" };
@@ -222,29 +244,28 @@ async function fetchApiFootballFixtures() {
 
   const timer = withTimeout(30000);
   try {
-    const url = new URL("/fixtures", API_FOOTBALL_BASE);
-    url.searchParams.set("league", API_FOOTBALL_LEAGUE);
-    url.searchParams.set("season", API_FOOTBALL_SEASON);
-    const response = await fetch(url, {
-      signal: timer.signal,
-      headers: {
-        Accept: "application/json",
-        "x-apisports-key": API_FOOTBALL_KEY,
-        "User-Agent": "WorldCup2026LiveDashboard/1.0"
-      }
+    const seasonPayload = await fetchApiFootballEndpoint({
+      league: API_FOOTBALL_LEAGUE,
+      season: API_FOOTBALL_SEASON
     });
-    if (!response.ok) throw new Error(`API-FOOTBALL fixtures returned ${response.status}`);
-    const payload = await response.json();
-    if (Array.isArray(payload.errors) && payload.errors.length) {
-      throw new Error(`API-FOOTBALL error: ${payload.errors.join(", ")}`);
+
+    const seasonError = extractApiFootballError(seasonPayload);
+    if (!seasonError) {
+      return {
+        fixtures: seasonPayload.response || [],
+        source: `API-FOOTBALL league=${API_FOOTBALL_LEAGUE} season=${API_FOOTBALL_SEASON}`,
+        error: null
+      };
     }
-    if (payload.errors && typeof payload.errors === "object" && Object.keys(payload.errors).length) {
-      throw new Error(`API-FOOTBALL error: ${JSON.stringify(payload.errors)}`);
-    }
+
+    const livePayload = await fetchApiFootballEndpoint({ live: "all" });
+    const liveError = extractApiFootballError(livePayload);
+    if (liveError) throw new Error(`API-FOOTBALL error: ${seasonError}; live fallback: ${liveError}`);
+
     return {
-      fixtures: payload.response || [],
-      source: `API-FOOTBALL league=${API_FOOTBALL_LEAGUE} season=${API_FOOTBALL_SEASON}`,
-      error: null
+      fixtures: livePayload.response || [],
+      source: "API-FOOTBALL live=all fallback",
+      error: `Season fixtures unavailable for current plan: ${seasonError}`
     };
   } catch (error) {
     return { fixtures: [], source: "api-football:error", error: error.message };
