@@ -265,9 +265,10 @@ function renderMetrics() {
   els.lastUpdated.textContent = state.meta?.updatedAt
     ? `最后同步 ${new Date(state.meta.updatedAt).toLocaleString("zh-CN")}`
     : "--";
+  const liveScoreReady = state.meta?.liveScoreSource && !String(state.meta.liveScoreSource).includes("not-configured") && !state.meta.liveScoreError;
   els.syncStatus.textContent = state.meta?.error
     ? `赛程已载入，远端提示：${state.meta.error}`
-    : `实时同步中 · ${state.matches.length} 场`;
+    : `${liveScoreReady ? "实时比分已接入" : "赛程轮询中"} · ${state.matches.length} 场${state.meta?.liveScoreMatches ? ` · 已匹配 ${state.meta.liveScoreMatches} 场比分源` : ""}`;
 }
 
 function rerender() {

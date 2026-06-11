@@ -25,6 +25,10 @@ const INSTAGRAM_PROXY_URL = process.env.INSTAGRAM_PROXY_URL || "https://lv-api-s
 const INSTAGRAM_API_KEY = process.env.INSTAGRAM_API_KEY || "";
 const YOUTUBE_PROXY_URL = process.env.YOUTUBE_PROXY_URL || "https://lv-api-sinfonlinea.ulikecam.com/agent/proxy/youtube/video_search";
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || "";
+const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY || "";
+const API_FOOTBALL_BASE = process.env.API_FOOTBALL_BASE || "https://v3.football.api-sports.io";
+const API_FOOTBALL_LEAGUE = process.env.API_FOOTBALL_LEAGUE || "1";
+const API_FOOTBALL_SEASON = process.env.API_FOOTBALL_SEASON || "2026";
 
 const app = express();
 const execFileAsync = promisify(execFile);
@@ -51,7 +55,10 @@ app.get(["/app.js", "/styles.css"], (request, response) => {
 const scheduleCache = {
   updatedAt: null,
   source: "not-loaded",
+  liveScoreSource: API_FOOTBALL_KEY ? "api-football" : "not-configured",
+  liveScoreUpdatedAt: null,
   error: null,
+  liveScoreError: null,
   data: { matches: [], teams: [], stadiums: [] }
 };
 
@@ -167,17 +174,153 @@ function normalizeSchedule(gamesPayload, teamsPayload, stadiumsPayload) {
   return { matches, teams, stadiums };
 }
 
+function normalizeName(value = "") {
+  return String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/gi, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeApiFootballStatus(status = {}) {
+  const short = String(status.short || "").toUpperCase();
+  const elapsed = status.elapsed ?? null;
+  const finished = ["FT", "AET", "PEN"].includes(short);
+  const live = ["1H", "2H", "ET", "BT", "P", "SUSP", "INT", "LIVE"].includes(short);
+  const labelMap = {
+    NS: "notstarted",
+    TBD: "notstarted",
+    "1H": "live",
+    HT: "halftime",
+    "2H": "live",
+    ET: "extra-time",
+    BT: "break-time",
+    P: "penalties",
+    FT: "finished",
+    AET: "finished",
+    PEN: "finished",
+    PST: "postponed",
+    CANC: "cancelled",
+    ABD: "abandoned",
+    AWD: "awarded",
+    WO: "walkover"
+  };
+  return {
+    status: labelMap[short] || short.toLowerCase() || "notstarted",
+    finished,
+    live,
+    elapsed,
+    short
+  };
+}
+
+async function fetchApiFootballFixtures() {
+  if (!API_FOOTBALL_KEY) {
+    return { fixtures: [], source: "api-football:not-configured", error: "API_FOOTBALL_KEY is not configured" };
+  }
+
+  const timer = withTimeout(30000);
+  try {
+    const url = new URL("/fixtures", API_FOOTBALL_BASE);
+    url.searchParams.set("league", API_FOOTBALL_LEAGUE);
+    url.searchParams.set("season", API_FOOTBALL_SEASON);
+    const response = await fetch(url, {
+      signal: timer.signal,
+      headers: {
+        Accept: "application/json",
+        "x-apisports-key": API_FOOTBALL_KEY,
+        "User-Agent": "WorldCup2026LiveDashboard/1.0"
+      }
+    });
+    if (!response.ok) throw new Error(`API-FOOTBALL fixtures returned ${response.status}`);
+    const payload = await response.json();
+    if (Array.isArray(payload.errors) && payload.errors.length) {
+      throw new Error(`API-FOOTBALL error: ${payload.errors.join(", ")}`);
+    }
+    if (payload.errors && typeof payload.errors === "object" && Object.keys(payload.errors).length) {
+      throw new Error(`API-FOOTBALL error: ${JSON.stringify(payload.errors)}`);
+    }
+    return {
+      fixtures: payload.response || [],
+      source: `API-FOOTBALL league=${API_FOOTBALL_LEAGUE} season=${API_FOOTBALL_SEASON}`,
+      error: null
+    };
+  } catch (error) {
+    return { fixtures: [], source: "api-football:error", error: error.message };
+  } finally {
+    timer.done();
+  }
+}
+
+function mergeLiveScores(schedule, fixtures = []) {
+  if (!fixtures.length) return { ...schedule, liveScoreMatches: 0 };
+
+  let liveScoreMatches = 0;
+  const normalizedFixtures = fixtures.map((fixture) => {
+    const homeName = fixture.teams?.home?.name || "";
+    const awayName = fixture.teams?.away?.name || "";
+    const status = normalizeApiFootballStatus(fixture.fixture?.status);
+    return {
+      fixture,
+      homeName,
+      awayName,
+      homeKey: normalizeName(homeName),
+      awayKey: normalizeName(awayName),
+      startsAt: new Date(fixture.fixture?.date || 0).getTime(),
+      homeScore: Number(fixture.goals?.home ?? fixture.score?.fulltime?.home ?? 0),
+      awayScore: Number(fixture.goals?.away ?? fixture.score?.fulltime?.away ?? 0),
+      status
+    };
+  });
+
+  const matches = schedule.matches.map((match) => {
+    const homeKey = normalizeName(match.homeTeam);
+    const awayKey = normalizeName(match.awayTeam);
+    const matchTime = new Date(match.dateIso || parseLocalDate(match.localDate) || 0).getTime();
+    const liveFixture = normalizedFixtures.find((fixture) => {
+      const sameTeams = fixture.homeKey === homeKey && fixture.awayKey === awayKey;
+      if (!sameTeams) return false;
+      if (Number.isNaN(matchTime) || Number.isNaN(fixture.startsAt)) return true;
+      return Math.abs(fixture.startsAt - matchTime) <= 1000 * 60 * 60 * 36;
+    });
+
+    if (!liveFixture) return match;
+    liveScoreMatches += 1;
+    return {
+      ...match,
+      status: liveFixture.status.elapsed ? String(liveFixture.status.elapsed) : liveFixture.status.status,
+      statusLabel: liveFixture.status.status,
+      finished: liveFixture.status.finished,
+      live: liveFixture.status.live,
+      elapsed: liveFixture.status.elapsed,
+      homeScore: liveFixture.homeScore,
+      awayScore: liveFixture.awayScore,
+      liveScoreProvider: "api-football",
+      liveScoreFixtureId: liveFixture.fixture.fixture?.id || null,
+      liveScoreUpdatedAt: new Date().toISOString()
+    };
+  });
+
+  return { ...schedule, matches, liveScoreMatches };
+}
+
 async function refreshSchedule() {
   try {
-    const [games, teams, stadiums] = await Promise.all([
+    const [games, teams, stadiums, liveScores] = await Promise.all([
       fetchJson("/get/games"),
       fetchJson("/get/teams"),
-      fetchJson("/get/stadiums")
+      fetchJson("/get/stadiums"),
+      fetchApiFootballFixtures()
     ]);
-    scheduleCache.data = normalizeSchedule(games, teams, stadiums);
+    const normalized = normalizeSchedule(games, teams, stadiums);
+    scheduleCache.data = mergeLiveScores(normalized, liveScores.fixtures);
     scheduleCache.updatedAt = new Date().toISOString();
-    scheduleCache.source = WORLDCUP_API_BASE;
+    scheduleCache.source = `${WORLDCUP_API_BASE} + ${liveScores.source}`;
+    scheduleCache.liveScoreSource = liveScores.source;
+    scheduleCache.liveScoreUpdatedAt = liveScores.error ? scheduleCache.liveScoreUpdatedAt : scheduleCache.updatedAt;
     scheduleCache.error = null;
+    scheduleCache.liveScoreError = liveScores.error;
   } catch (error) {
     if (!scheduleCache.data.matches.length) {
       scheduleCache.data = fallbackSchedule;
@@ -1010,6 +1153,10 @@ app.get("/api/schedule", async (_request, response) => {
     meta: {
       updatedAt: scheduleCache.updatedAt,
       source: scheduleCache.source,
+      liveScoreSource: scheduleCache.liveScoreSource,
+      liveScoreUpdatedAt: scheduleCache.liveScoreUpdatedAt,
+      liveScoreError: scheduleCache.liveScoreError,
+      liveScoreMatches: scheduleCache.data.liveScoreMatches || 0,
       error: scheduleCache.error,
       refreshMs: REFRESH_MS
     }

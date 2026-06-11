@@ -29,6 +29,7 @@ http://localhost:4173
 ## 当前数据源
 
 - 赛程、球队、场馆：`https://worldcup26.ir/get/games`、`/get/teams`、`/get/stadiums`
+- 实时比分增强层：API-FOOTBALL，配置 `API_FOOTBALL_KEY` 后会用 `league=1`、`season=2026` 合并实时比分、比赛状态和完赛结果
 - 新闻：Google News RSS
 - 公开讨论反馈：PullPush Reddit index、Hacker News Algolia
 - Bluesky：已接入公共搜索接口，但当前环境会返回 403，页面会在来源状态里显示该情况
@@ -46,7 +47,8 @@ npm start
 
 ## 实时更新策略
 
-- 赛程每 5 分钟自动刷新一次
+- 赛程每 5 分钟自动刷新一次；如果配置了 `API_FOOTBALL_KEY`，每次刷新会同步 API-FOOTBALL fixtures 并合并比分
+- 没有配置实时比分 Key 时，页面会继续使用 `worldcup26.ir` 的赛程/比分字段和内置 104 场快照兜底
 - 单场赛事的新闻和讨论聚合缓存 8 分钟
 - 点击赛事节点时会按双方球队和世界杯关键词重新聚合信息
 - 社交反馈按发布时间过滤最近 3 天数据，来源包括 Reddit、Bluesky、Hacker News，以及配置后的 TikTok / Instagram / YouTube 桥接器
@@ -82,6 +84,7 @@ GET /api/hashtag-trends
 可配置环境变量：
 
 ```bash
+API_FOOTBALL_KEY="your-api-football-key" \
 TIKTOK_BRIDGE_URL="https://your-service.example.com/tiktok/search" \
 INSTAGRAM_BRIDGE_URL="https://your-service.example.com/instagram/search" \
 YOUTUBE_BRIDGE_URL="https://your-service.example.com/youtube/search" \
