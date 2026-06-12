@@ -793,38 +793,204 @@ function extractOutlet(title = "") {
   return parts.length > 1 ? parts.at(-1) : "";
 }
 
-function buildAISummary(match, news, social, hotspots) {
-  const titles = news.map((item) => item.title).filter(Boolean);
-  const outlets = [...new Set(titles.map(extractOutlet).filter(Boolean))].slice(0, 4);
-  const topSocial = social
-    .filter((item) => item.title)
+const insightStopwords = new Set([
+  "world",
+  "cup",
+  "fifa",
+  "fifaworldcup",
+  "worldcup",
+  "worldcup2026",
+  "viral",
+  "vairal",
+  "fyp",
+  "foryou",
+  "foryoupage",
+  "football",
+  "soccer",
+  "official",
+  "video",
+  "highlights",
+  "news",
+  "2026",
+  "match",
+  "matches",
+  "vs",
+  "and",
+  "the",
+  "for",
+  "with",
+  "from",
+  "this",
+  "that",
+  "today",
+  "live",
+  "vivo",
+  "game",
+  "games",
+  "goal",
+  "goals",
+  "about",
+  "team",
+  "teams"
+]);
+
+function getProfileForSummary(teamName) {
+  const profile = cultureProfiles[teamName];
+  if (profile) return profile;
+  return {
+    identity: `${teamName} 的国家队内容可以从国旗配色、球迷入场、城市地标和赛前情绪里提炼。`,
+    symbols: [teamName, "national colors", "supporter chants"],
+    visualStyle: "national colors, supporter culture, stadium atmosphere"
+  };
+}
+
+function getSummaryPlayers(teamName, limit = 3) {
+  return buildTeamPlayers(teamName)
+    .slice(0, limit)
+    .map((player) => `${player.name}（${player.role}）`);
+}
+
+function formatVVCompact(value = 0) {
+  const number = Number(value || 0);
+  if (!Number.isFinite(number) || number <= 0) return "未知 VV";
+  if (number >= 100000000) return `${(number / 100000000).toFixed(1).replace(/\.0$/, "")}亿 VV`;
+  if (number >= 10000) return `${(number / 10000).toFixed(1).replace(/\.0$/, "")}万 VV`;
+  return `${Math.round(number)} VV`;
+}
+
+function compactTitle(title = "", maxLength = 54) {
+  const cleaned = cleanText(title);
+  if (cleaned.length <= maxLength) return cleaned;
+  return `${cleaned.slice(0, maxLength - 1)}…`;
+}
+
+function getTeamSymbols(teamName) {
+  return getProfileForSummary(teamName).symbols.slice(0, 3);
+}
+
+function extractSignalTerms(match, news, social) {
+  const text = [...news, ...social]
+    .map((item) => `${item.title || ""} ${item.summary || ""}`)
+    .join(" ");
+  const lowerText = text.toLowerCase();
+  const tagTerms = [];
+  const playerTerms = [];
+  const conceptTerms = [];
+  const tags = text.match(/#[\w\u4e00-\u9fff]+/g) || [];
+  tags.forEach((tag) => {
+    const normalized = tag.toLowerCase().replace(/^#/, "");
+    if (!insightStopwords.has(normalized)) tagTerms.push(tag);
+  });
+
+  [...buildTeamPlayers(match.homeTeam), ...buildTeamPlayers(match.awayTeam)].forEach((player) => {
+    const name = player.name;
+    const nameKey = name.toLowerCase();
+    const lastName = nameKey.split(/\s+/).at(-1);
+    if (lowerText.includes(nameKey) || (lastName && lowerText.includes(lastName))) {
+      playerTerms.push(name);
+    }
+  });
+
+  const concepts = [
+    ["红牌/争议判罚", /(red card|tarjetas rojas|var|referee|controversy|appeal)/i],
+    ["门将扑救", /(save|saves|arquero|goalkeeper|keeper|扑救)/i],
+    ["进球瞬间", /(goal|gol|goles|scored|进球)/i],
+    ["首战氛围", /(opening|starts now|first game|首战|揭幕)/i],
+    ["球迷反应", /(fan|fans|aficionados|reaction|celebration|球迷|庆祝)/i],
+    ["赛前预测", /(predict|prediction|odds|favorite|win today|预测|赔率)/i],
+    ["高光二创", /(highlight|clip|edit|template|高光|剪辑)/i]
+  ];
+  concepts.forEach(([label, pattern]) => {
+    if (pattern.test(text)) conceptTerms.push(label);
+  });
+
+  const unique = [...new Set([...conceptTerms, ...playerTerms, ...tagTerms])].slice(0, 6);
+  return unique.length ? unique : ["比分预测", "球员对位", "球迷反应", "国旗视觉"];
+}
+
+function getBestSocialByNetwork(social) {
+  const byNetwork = new Map();
+  social.forEach((item) => {
+    const network = item.network || "Social";
+    const current = byNetwork.get(network);
+    if (!current || (item.socialRankScore || 0) > (current.socialRankScore || 0)) {
+      byNetwork.set(network, item);
+    }
+  });
+  return [...byNetwork.values()]
     .sort((a, b) => (b.socialRankScore || 0) - (a.socialRankScore || 0))
     .slice(0, 3);
+}
+
+function buildConcreteAngles(match, news, social, hotspots) {
+  const matchup = `${match.homeTeam} vs ${match.awayTeam}`;
+  const homePlayers = getSummaryPlayers(match.homeTeam, 2);
+  const awayPlayers = getSummaryPlayers(match.awayTeam, 2);
+  const homeSymbols = getTeamSymbols(match.homeTeam);
+  const awaySymbols = getTeamSymbols(match.awayTeam);
+  const signalTerms = extractSignalTerms(match, news, social);
+  const bestSocial = getBestSocialByNetwork(social);
+  const topHotspots = hotspots.slice(0, 3).map((topic) => topic.name);
+  const bullets = [];
+
+  bullets.push(`核心选题：把 ${match.homeTeam} 的「${homeSymbols.join(" / ")}」和 ${match.awayTeam} 的「${awaySymbols.join(" / ")}」做成对照，标题可以走“同一座球场里的两种国家队气质”。`);
+
+  bullets.push(`球员切入：优先围绕 ${homePlayers.join("、")} 对上 ${awayPlayers.join("、")} 做“关键人物 + 位置职责 + 谁能改变比赛节奏”的短视频脚本。`);
+
+  if (bestSocial.length) {
+    const examples = bestSocial
+      .map((item) => `${item.network}《${compactTitle(item.title || item.author || "高热内容")}》${formatVVCompact(item.socialVV)}`)
+      .join("；");
+    bullets.push(`社交借势：近 3 天高热样本里，${examples}，可以拆成“同款情绪开头 + 本场预测 + 球迷反应”的投稿结构。`);
+  } else {
+    bullets.push(`社交借势：近 3 天暂时没有足够强的高 VV 样本，建议先做“比分预测、球迷第一反应、队旗变装、球星出场想象”四类低成本内容。`);
+  }
+
+  if (signalTerms.length) {
+    bullets.push(`标题关键词：当前可抓 ${signalTerms.slice(0, 5).join("、")}，适合放在封面、副标题或口播前三秒。`);
+  } else if (topHotspots.length) {
+    bullets.push(`标题关键词：当前热点偏向 ${topHotspots.join("、")}，适合做“赛前 30 秒看懂本场”的信息流内容。`);
+  }
+
+  const venueLine = [match.venue, match.city].filter(Boolean).join(" · ");
+  if (venueLine) {
+    bullets.push(`现场感素材：用 ${venueLine} 做开场锚点，叠加两队国旗色、球迷歌声、入场镜头，能让内容比普通赛前预测更有画面。`);
+  }
+
+  if (news.length) {
+    const usefulNews = news
+      .slice(0, 2)
+      .map((item) => compactTitle(item.title, 42))
+      .filter(Boolean);
+    if (usefulNews.length) {
+      bullets.push(`事实核验：可参考新闻里的「${usefulNews.join("」和「")}」，把预测内容补上具体事实点。`);
+    }
+  }
+
+  return bullets.slice(0, 5).map((bullet) => bullet.replace(matchup, matchup));
+}
+
+function buildAISummary(match, news, social, hotspots) {
+  const titles = news.map((item) => item.title).filter(Boolean);
+  const outlets = [...new Set(titles.map(extractOutlet).filter(Boolean))].slice(0, 3);
   const topHotspots = hotspots.slice(0, 3).map((topic) => topic.name);
   const matchup = `${match.homeTeam} vs ${match.awayTeam}`;
+  const bullets = buildConcreteAngles(match, news, social, hotspots);
 
-  const bullets = [];
-  if (news.length) {
-    bullets.push(`看点：${match.stage} 的 ${matchup} 适合围绕双方国家文化、球迷入场、赛前预测和城市氛围做内容切入。`);
-  } else {
-    bullets.push(`看点：${matchup} 当前公开新闻还不密集，可以先做赛前氛围、队旗配色、球迷预测类投稿。`);
-  }
-  if (topHotspots.length) {
-    bullets.push(`热点：当前可借势的话题集中在 ${topHotspots.join("、")}，适合做短视频标题和封面关键词。`);
-  } else {
-    bullets.push("热点：暂未形成强集中议题，建议用“谁会赢”“球迷反应”“主场城市一日游”等轻量选题先铺量。");
-  }
-  if (topSocial.length) {
-    bullets.push(`投稿角度：社交平台较活跃的内容来自 ${[...new Set(topSocial.map((item) => item.network))].join("、")}，可参考高 VV 内容做“预测 + 情绪反应 + 国旗视觉”的组合。`);
-  }
   if (outlets.length) {
-    bullets.push(`核验素材：新闻来源覆盖 ${outlets.join("、")} 等媒体，适合提炼赛前事实点，避免只做空泛情绪内容。`);
+    bullets.push(`媒体线索：新闻来源覆盖 ${outlets.join("、")}，发布前可以用这些来源校验阵容、伤病和赛程事实。`);
   }
+  const watchlist = [
+    ...getSummaryPlayers(match.homeTeam, 2).map((item) => item.replace(/（.*$/, "")),
+    ...getSummaryPlayers(match.awayTeam, 2).map((item) => item.replace(/（.*$/, "")),
+    ...topHotspots,
+    ...extractSignalTerms(match, news, social)
+  ];
 
   return {
     headline: `${matchup}：本场看点与投稿灵感`,
     bullets: bullets.slice(0, 4),
-    watchlist: topHotspots.length ? topHotspots : ["赛前预测", "球迷反应", "国旗视觉", "城市氛围"],
+    watchlist: [...new Set(watchlist)].slice(0, 8),
     generatedBy: "local-match-creative-brief"
   };
 }
@@ -1312,14 +1478,17 @@ app.get("/api/matches/:id/insights", async (request, response) => {
   }
 
   const since = new Date(Date.now() - SOCIAL_LOOKBACK_MS).toISOString();
+  const homeLeadPlayer = buildTeamPlayers(match.homeTeam)[0]?.name || "";
+  const awayLeadPlayer = buildTeamPlayers(match.awayTeam)[0]?.name || "";
+  const socialQuery = `${match.homeTeam} ${match.awayTeam} ${homeLeadPlayer} ${awayLeadPlayer} World Cup 2026`;
   const [newsResult, redditResult, blueskyResult, hackerNewsResult, tiktokResult, instagramResult, youtubeResult] = await Promise.allSettled([
     getGoogleNews(query),
-    getReddit(`${match.homeTeam} ${match.awayTeam} World Cup`),
-    getBluesky(`${match.homeTeam} ${match.awayTeam} World Cup`),
-    getHackerNews(`${match.homeTeam} ${match.awayTeam} World Cup`),
-    getPlatformBridge("TikTok", `${match.homeTeam} ${match.awayTeam} World Cup`, TIKTOK_BRIDGE_URL, { since }),
-    getPlatformBridge("Instagram", `${match.homeTeam} ${match.awayTeam} World Cup`, INSTAGRAM_BRIDGE_URL, { since }),
-    getPlatformBridge("YouTube", `${match.homeTeam} ${match.awayTeam} World Cup`, YOUTUBE_BRIDGE_URL, { since })
+    getReddit(socialQuery),
+    getBluesky(socialQuery),
+    getHackerNews(socialQuery),
+    getPlatformBridge("TikTok", socialQuery, TIKTOK_BRIDGE_URL, { since }),
+    getPlatformBridge("Instagram", socialQuery, INSTAGRAM_BRIDGE_URL, { since }),
+    getPlatformBridge("YouTube", socialQuery, YOUTUBE_BRIDGE_URL, { since })
   ]);
 
   const news = newsResult.status === "fulfilled" ? newsResult.value : [];
